@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Build.Definition;
 using Microsoft.Build.Evaluation;
@@ -31,17 +32,16 @@ namespace SitecoreSerialisationConverter
     {
         static void Main(string[] args)
         {
-            var solutionFolder = @"C:\CE\SourceCode__Upgrade_102_v2\src\";
+            var solutionFolder = @"C:\Projects\Customers\Sitecore\helix-basic-tds\src\";
             var tdsFiles = Directory.GetFiles(solutionFolder, "*.scproj", SearchOption.AllDirectories);
-            string savePath =
-                @"C:\Temp\ConvertedSerialisationFiles";
+            string savePath = @"C:\Temp\ConvertedSerialisationFiles";
 
             if (!Directory.Exists(savePath))
             {
                 Directory.CreateDirectory(savePath);
             }
 
-            foreach(var file in tdsFiles)
+            foreach (var file in tdsFiles)
             {
                 ConvertSerialisationFile(file, savePath);
             }
@@ -53,8 +53,8 @@ namespace SitecoreSerialisationConverter
 
             if (project != null)
             {
-                var projectName = project.Properties.Where(x => x.Name == "MSBuildProjectName").FirstOrDefault()?.UnevaluatedValue;
-                var database = project.Properties.Where(x => x.Name == "SitecoreDatabase").FirstOrDefault()?.UnevaluatedValue;
+                var projectName = project.Properties.FirstOrDefault(x => x.Name == "MSBuildProjectName")?.UnevaluatedValue;
+                var database = project.Properties.FirstOrDefault(x => x.Name == "SitecoreDatabase")?.UnevaluatedValue;
 
                 SerializationModuleConfiguration newConfigModule = new SerializationModuleConfiguration()
                 {
@@ -68,41 +68,24 @@ namespace SitecoreSerialisationConverter
 
                 var roles = new List<RolePredicateItem>();
 
+                var ignoreSyncChildren = false;
+                var ignoreDirectSyncChildren = false;
+
                 foreach (var item in project.Items)
                 {
                     if (item.ItemType == "SitecoreItem")
                     {
                         var includePath = item.Xml.Include;
-                        var deploymentType = item.Xml.Metadata.Where(x => x.Name == "ItemDeployment").FirstOrDefault()
-                            ?.Value;
-                        var childSynchronisation = item.Xml.Metadata.Where(x => x.Name == "ChildItemSynchronization")
-                            .FirstOrDefault()
-                            ?.Value;
+                        var deploymentType = item.Xml.Metadata.FirstOrDefault(x => x.Name == "ItemDeployment")?.Value;
+                        var childSynchronisation = item.Xml.Metadata.FirstOrDefault(x => x.Name == "ChildItemSynchronization")?.Value;
 
-                        FilesystemTreeSpec newSpec = new FilesystemTreeSpec()
-                        {
-                            Name = GetSafeName(includePath),
-                            Path = ItemPath.FromPathString(GetSafePath(includePath)),
-                            AllowedPushOperations = GetPushOperation(deploymentType),
-                            Scope = GetProjectedScope(childSynchronisation)
-                        };
-
-                        //if it's not default then set it.
-                        if (database != "master")
-                        {
-                            newSpec.Database = database;
-                        }
-
-
-                        //set defaults
-
-                        newConfigModule.Items.Includes.Add(newSpec);
+                        RenderItem(database, newConfigModule, ref ignoreSyncChildren, ref ignoreDirectSyncChildren, includePath, deploymentType, childSynchronisation);
                     }
                     else if (item.ItemType == "SitecoreRole")
                     {
                         var includePathSplit = item.Xml.Include?.Split('\\');
 
-                        if (includePathSplit.Length == 3)
+                        if (includePathSplit?.Length == 3)
                         {
                             var domain = includePathSplit[1];
                             var roleName = includePathSplit[2];
@@ -124,14 +107,148 @@ namespace SitecoreSerialisationConverter
                     newConfigModule.Roles = roles;
                 }
 
-                //FilesystemSerializationModuleConfigurationManager configManager =
-                //    new FilesystemSerializationModuleConfigurationManager(new DummyLoggerFactory(), new ModuleConfigurationHandler());
+                if (!newConfigModule.Items.Includes.Any())
+                {
+                    return;
+                }
+
                 WriteNewConfig(savePath, newConfigModule);
-                //Console.WriteLine("test");
+            }
+        }
+
+        private static void RenderItem(string database, SerializationModuleConfiguration newConfigModule, ref bool ignoreSyncChildren, ref bool ignoreDirectSyncChildren, string includePath, string deploymentType, string childSynchronisation)
+        {
+            if (childSynchronisation == "NoChildSynchronization")
+            {
+                var path = GetSafePath(includePath);
+
+                if (database == "master")
+                {
+                    var matchedMasterPaths = GetIgnoredMasterRoutes().Where(x => Regex.IsMatch(x, path, RegexOptions.IgnoreCase));
+
+                    if (!matchedMasterPaths.Any())
+                    {
+                        AddItem(database, newConfigModule, includePath, deploymentType, childSynchronisation);
+
+                    }
+                    else
+                    {
+                        Console.WriteLine("Master ignored path: " + path);
+                    }
+                }
+                else if (database == "core")
+                {
+                    var matchedCorePaths = GetIgnoredCoreRoutes().Where(x => Regex.IsMatch(x, path, RegexOptions.IgnoreCase));
+
+                    if (!matchedCorePaths.Any())
+                    {
+                        AddItem(database, newConfigModule, includePath, deploymentType, childSynchronisation);
+
+
+                    }
+                    else
+                    {
+                        Console.WriteLine("Core ignored path: " + path);
+                    }
+                }
+            }
+
+            if (childSynchronisation == "KeepAllChildrenSynchronized" && !ignoreSyncChildren)
+            {
+                ignoreSyncChildren = true;
+
+                AddItem(database, newConfigModule, includePath, deploymentType, childSynchronisation);
+            }
+
+            if (childSynchronisation != "KeepAllChildrenSynchronized")
+            {
+                ignoreSyncChildren = false;
+            }
+
+            if (childSynchronisation == "KeepDirectDescendantsSynchronized" && !ignoreDirectSyncChildren)
+            {
+                ignoreDirectSyncChildren = true;
+
+                AddItem(database, newConfigModule, includePath, deploymentType, childSynchronisation);
+            }
+
+            if (childSynchronisation != "KeepDirectDescendantsSynchronized")
+            {
+                ignoreDirectSyncChildren = false;
+            }
+        }
+
+        private static List<string> GetIgnoredMasterRoutes()
+        {
+            List<string> ignoredMasterRoutes = new List<string>()
+            {
+                "/sitecore/layout",
+                "/sitecore/layout/Renderings",
+                "/sitecore/layout/Renderings/Foundation",
+                "/sitecore/layout/Renderings/Feature",
+                "/sitecore/layout/Renderings/Project",
+                "/sitecore/templates",
+                "/sitecore/templates/Foundation",
+                "/sitecore/templates/Feature",
+                "/sitecore/templates/Project",
+                "/sitecore/layout/Placeholder Settings",
+                "/sitecore/layout/Placeholder Settings/Foundation",
+                "/sitecore/layout/Placeholder Settings/Feature",
+                "/sitecore/layout/Placeholder Settings/Project",
+                "/sitecore/media library",
+                "/sitecore/system",
+                "/sitecore/system/Settings",
+                "/sitecore/system/Settings/Rules",
+                "/sitecore/system/Settings/Rules/Insert Options",
+                "/sitecore/system/Settings/Rules/Insert Options/Rules",
+                "/sitecore/templates/Branches",
+                "/sitecore/templates/Branches/Foundation/",
+                "/sitecore/templates/Branches/Feature/",
+                "/sitecore/templates/Branches/Project/",
+                "/sitecore/content",
+                "/sitecore/layout/Layouts",
+                "/sitecore/layout/Layouts/Project"
+            };
+
+            return ignoredMasterRoutes;
+        }
+
+        private static List<string> GetIgnoredCoreRoutes()
+        {
+            List<string> ignoredCoreRoutes = new List<string>()
+            {
+                "/sitecore/content",
+                "/sitecore/content/Applications",
+                "/sitecore/content/Applications/WebEdit",
+                "/sitecore/content/Applications/WebEdit/Custom Experience Buttons"
+            };
+
+            return ignoredCoreRoutes;
+        }
+
+        private static void AddItem(string database, SerializationModuleConfiguration newConfigModule, string includePath, string deploymentType, string childSynchronisation)
+        {
+            FilesystemTreeSpec newSpec = new FilesystemTreeSpec()
+            {
+                Name = GetSafeName(includePath),
+                Path = ItemPath.FromPathString(GetSafePath(includePath)),
+                AllowedPushOperations = GetPushOperation(deploymentType),
+                Scope = GetProjectedScope(childSynchronisation)
+            };
+
+            //if it's not default then set it.
+            if (database != "master")
+            {
+                newSpec.Database = database;
             }
 
 
+            //set defaults
+
+            newConfigModule.Items.Includes.Add(newSpec);
         }
+
+
 
         private static void WriteNewConfig(string savePath, SerializationModuleConfiguration moduleConfiguration)
         {
@@ -171,6 +288,8 @@ namespace SitecoreSerialisationConverter
                     case "NoChildSynchronization":
                         return TreeScope.SingleItem;
                     case "KeepAllChildrenSynchronized":
+                        return TreeScope.ItemAndDescendants;
+                    case "KeepDirectDescendantsSynchronized":
                         return TreeScope.ItemAndChildren;
                     default:
                         return TreeScope.SingleItem;
@@ -191,7 +310,7 @@ namespace SitecoreSerialisationConverter
                     case "DeployOnce":
                         return AllowedPushOperations.CreateOnly;
                     default:
-                        return AllowedPushOperations.CreateAndUpdate;
+                        return AllowedPushOperations.CreateOnly;
                 }
             }
 
@@ -202,7 +321,7 @@ namespace SitecoreSerialisationConverter
         {
             if (!string.IsNullOrEmpty(currentPath))
             {
-                return $"/{currentPath.Replace(@"\", @"/")}";
+                return $"/{currentPath.Replace(@"\", @"/").Replace(".yml", string.Empty)}";
             }
 
             return currentPath;
@@ -212,7 +331,7 @@ namespace SitecoreSerialisationConverter
         {
             if (!string.IsNullOrEmpty(proposedName))
             {
-                return proposedName.Replace(@"\", "-").Replace(".item", string.Empty);
+                return proposedName.Replace(@"\", "-").Replace(".item", string.Empty).Replace(".yml", string.Empty);
             }
 
             return proposedName;
