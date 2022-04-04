@@ -34,7 +34,9 @@ namespace SitecoreSerialisationConverter
         {
             var solutionFolder = @"C:\Projects\Customers\Sitecore\helix-basic-tds\src\";
             var tdsFiles = Directory.GetFiles(solutionFolder, "*.scproj", SearchOption.AllDirectories);
-            string savePath = @"C:\Temp\ConvertedSerialisationFiles";
+            var savePath = @"C:\Temp\ConvertedSerialisationFiles";
+            bool useRelativeSavePath = false;
+
 
             if (!Directory.Exists(savePath))
             {
@@ -43,11 +45,11 @@ namespace SitecoreSerialisationConverter
 
             foreach (var file in tdsFiles)
             {
-                ConvertSerialisationFile(file, savePath);
+                ConvertSerialisationFile(file, savePath, solutionFolder, useRelativeSavePath);
             }
         }
 
-        private static void ConvertSerialisationFile(string projectPath, string savePath)
+        private static void ConvertSerialisationFile(string projectPath, string savePath, string solutionFolder, bool useRelativeSavePath)
         {
             Project project = new Project(projectPath);
 
@@ -97,7 +99,7 @@ namespace SitecoreSerialisationConverter
                                     Domain = domain,
                                     Pattern = roleName.Replace(".role", string.Empty)
                                 });
-                            }
+                            } 
                         }
                     }
                 }
@@ -110,6 +112,11 @@ namespace SitecoreSerialisationConverter
                 if (!newConfigModule.Items.Includes.Any())
                 {
                     return;
+                }
+
+                if (useRelativeSavePath)
+                {
+                    savePath = Path.GetFullPath(Path.Combine(project.DirectoryPath, @"../../"));
                 }
 
                 WriteNewConfig(savePath, newConfigModule);
@@ -178,6 +185,40 @@ namespace SitecoreSerialisationConverter
             }
         }
 
+        private static void AddItem(string database, SerializationModuleConfiguration newConfigModule, string includePath, string deploymentType, string childSynchronisation)
+        {
+            FilesystemTreeSpec newSpec = new FilesystemTreeSpec()
+            {
+                Name = GetSafeName(includePath),
+                Path = ItemPath.FromPathString(GetSafePath(includePath)),
+                AllowedPushOperations = GetPushOperation(deploymentType),
+                Scope = GetProjectedScope(childSynchronisation)
+            };
+
+            //if it's not default then set it.
+            if (database != "master")
+            {
+                newSpec.Database = database;
+            }
+
+
+            //set defaults
+
+            newConfigModule.Items.Includes.Add(newSpec);
+        }
+
+        private static void WriteNewConfig(string savePath, SerializationModuleConfiguration moduleConfiguration)
+        {
+            var path = Path.Combine(savePath, moduleConfiguration.Namespace + ".module.json");
+            using (FileStream outputStream = new FileStream(path, FileMode.Create, FileAccess.Write))
+            {
+                using (StreamWriter textWriter = new StreamWriter(outputStream))
+                {
+                    JsonSerializer.Create(_serializerSettings).Serialize(textWriter, moduleConfiguration);
+                }
+            }
+        }
+
         private static List<string> GetIgnoredMasterRoutes()
         {
             List<string> ignoredMasterRoutes = new List<string>()
@@ -224,42 +265,6 @@ namespace SitecoreSerialisationConverter
             };
 
             return ignoredCoreRoutes;
-        }
-
-        private static void AddItem(string database, SerializationModuleConfiguration newConfigModule, string includePath, string deploymentType, string childSynchronisation)
-        {
-            FilesystemTreeSpec newSpec = new FilesystemTreeSpec()
-            {
-                Name = GetSafeName(includePath),
-                Path = ItemPath.FromPathString(GetSafePath(includePath)),
-                AllowedPushOperations = GetPushOperation(deploymentType),
-                Scope = GetProjectedScope(childSynchronisation)
-            };
-
-            //if it's not default then set it.
-            if (database != "master")
-            {
-                newSpec.Database = database;
-            }
-
-
-            //set defaults
-
-            newConfigModule.Items.Includes.Add(newSpec);
-        }
-
-
-
-        private static void WriteNewConfig(string savePath, SerializationModuleConfiguration moduleConfiguration)
-        {
-            var path = Path.Combine(savePath, moduleConfiguration.Namespace + ".module.json");
-            using (FileStream outputStream = new FileStream(path, FileMode.Create, FileAccess.Write))
-            {
-                using (StreamWriter textWriter = new StreamWriter(outputStream))
-                {
-                    JsonSerializer.Create(_serializerSettings).Serialize(textWriter, moduleConfiguration);
-                }
-            }
         }
 
         private static readonly JsonSerializerSettings _serializerSettings = new JsonSerializerSettings
