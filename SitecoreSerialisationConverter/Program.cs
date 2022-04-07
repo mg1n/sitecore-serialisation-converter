@@ -2,10 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using Microsoft.Build.Definition;
 using Microsoft.Build.Evaluation;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -36,7 +33,7 @@ namespace SitecoreSerialisationConverter
             var tdsFiles = Directory.GetFiles(solutionFolder, "*.scproj", SearchOption.AllDirectories);
             var savePath = @"C:\Temp\ConvertedSerialisationFiles";
             bool useRelativeSavePath = false;
-
+            var relativeSavePath = "../../";
 
             if (!Directory.Exists(savePath))
             {
@@ -45,11 +42,11 @@ namespace SitecoreSerialisationConverter
 
             foreach (var file in tdsFiles)
             {
-                ConvertSerialisationFile(file, savePath, solutionFolder, useRelativeSavePath);
+                ConvertSerialisationFile(file, savePath, useRelativeSavePath, relativeSavePath);
             }
         }
 
-        private static void ConvertSerialisationFile(string projectPath, string savePath, string solutionFolder, bool useRelativeSavePath)
+        private static void ConvertSerialisationFile(string projectPath, string savePath, bool useRelativeSavePath, string relativeSavePath)
         {
             Project project = new Project(projectPath);
 
@@ -99,7 +96,7 @@ namespace SitecoreSerialisationConverter
                                     Domain = domain,
                                     Pattern = roleName.Replace(".role", string.Empty)
                                 });
-                            } 
+                            }
                         }
                     }
                 }
@@ -116,7 +113,7 @@ namespace SitecoreSerialisationConverter
 
                 if (useRelativeSavePath)
                 {
-                    savePath = Path.GetFullPath(Path.Combine(project.DirectoryPath, @"../../"));
+                    savePath = Path.GetFullPath(Path.Combine(project.DirectoryPath, @relativeSavePath));
                 }
 
                 WriteNewConfig(savePath, newConfigModule);
