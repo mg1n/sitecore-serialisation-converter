@@ -1,4 +1,15 @@
-# Sitecore TDS serialisation converter
+# Sitecore TDS to SCS serialisation converter
+
+This tool can be used to help customers transition from TDS projects to SCS modules.
+ 
+After the tool is run in the solution web root, all scproj files should be turned into equivalent SCS modules.
+Then after running ‘sitecore ser pull’ the relevant items are synchronised from the Sitecore database to disk, after which the TDS projects and associated item files can be deleted.
+ 
+Supported features:
+* Support for Core/Master databases.
+* Support for role serialisation.
+* Support controlling whether children should be synchronised.
+* Support converting AlwaysUpdate / DeployOnce TDS deployment type for an item into equivalent SCS allowed push operation.
 
 ## Sitecore CLI setup
 * Install Sitecore Serialise into your environment - https://doc.sitecore.com/xp/en/developers/102/developer-tools/install-sitecore-command-line-interface.html
