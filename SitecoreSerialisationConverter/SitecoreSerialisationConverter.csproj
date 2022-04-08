@@ -7,8 +7,17 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Build" Version="17.1.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="6.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="6.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="6.0.0" />
     <PackageReference Include="Sitecore.DevEx.Serialization" Version="4.1.1" />
     <PackageReference Include="Sitecore.DevEx.Serialization.Client" Version="4.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appSettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

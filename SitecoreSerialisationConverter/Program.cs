@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.Build.Evaluation;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -15,6 +16,7 @@ using Sitecore.DevEx.Serialization.Client.Datasources.Filesystem.Configuration;
 using Sitecore.DevEx.Serialization.Client.Services;
 using Sitecore.DevEx.Serialization.Models;
 using Sitecore.DevEx.Serialization.Models.Roles;
+using SitecoreSerialisationConverter.Models;
 
 namespace SitecoreSerialisationConverter
 {
@@ -27,13 +29,22 @@ namespace SitecoreSerialisationConverter
     /// </summary>
     class Program
     {
+        public static Settings Settings;
+
         static void Main(string[] args)
         {
-            var solutionFolder = @"C:\Projects\Customers\Sitecore\helix-basic-tds\src\";
+            IConfiguration config = new ConfigurationBuilder()
+                .AddJsonFile("appsettings.json")
+                .AddEnvironmentVariables()
+                .Build();
+
+            Settings = config.GetRequiredSection("Settings").Get<Settings>();
+
+            var solutionFolder = Settings.SolutionFolder;
             var tdsFiles = Directory.GetFiles(solutionFolder, "*.scproj", SearchOption.AllDirectories);
-            var savePath = @"C:\Temp\ConvertedSerialisationFiles";
-            bool useRelativeSavePath = false;
-            var relativeSavePath = "../../";
+            var savePath = Settings.SavePath;
+            bool useRelativeSavePath = Settings.UseRelativeSavePath;
+            var relativeSavePath = Settings.RelativeSavePath;
 
             if (!Directory.Exists(savePath))
             {
@@ -57,7 +68,7 @@ namespace SitecoreSerialisationConverter
 
                 SerializationModuleConfiguration newConfigModule = new SerializationModuleConfiguration()
                 {
-                    Description = "Please complete this!",
+                    Description = Settings.ProjectDescription,
                     Namespace = projectName,
                     Items = new SerializationModuleConfigurationItems()
                     {
@@ -218,48 +229,14 @@ namespace SitecoreSerialisationConverter
 
         private static List<string> GetIgnoredMasterRoutes()
         {
-            List<string> ignoredMasterRoutes = new List<string>()
-            {
-                "/sitecore/layout",
-                "/sitecore/layout/Renderings",
-                "/sitecore/layout/Renderings/Foundation",
-                "/sitecore/layout/Renderings/Feature",
-                "/sitecore/layout/Renderings/Project",
-                "/sitecore/templates",
-                "/sitecore/templates/Foundation",
-                "/sitecore/templates/Feature",
-                "/sitecore/templates/Project",
-                "/sitecore/layout/Placeholder Settings",
-                "/sitecore/layout/Placeholder Settings/Foundation",
-                "/sitecore/layout/Placeholder Settings/Feature",
-                "/sitecore/layout/Placeholder Settings/Project",
-                "/sitecore/media library",
-                "/sitecore/system",
-                "/sitecore/system/Settings",
-                "/sitecore/system/Settings/Rules",
-                "/sitecore/system/Settings/Rules/Insert Options",
-                "/sitecore/system/Settings/Rules/Insert Options/Rules",
-                "/sitecore/templates/Branches",
-                "/sitecore/templates/Branches/Foundation/",
-                "/sitecore/templates/Branches/Feature/",
-                "/sitecore/templates/Branches/Project/",
-                "/sitecore/content",
-                "/sitecore/layout/Layouts",
-                "/sitecore/layout/Layouts/Project"
-            };
+            List<string> ignoredMasterRoutes = Settings.IgnoredRoutes.Master;
 
             return ignoredMasterRoutes;
         }
 
         private static List<string> GetIgnoredCoreRoutes()
         {
-            List<string> ignoredCoreRoutes = new List<string>()
-            {
-                "/sitecore/content",
-                "/sitecore/content/Applications",
-                "/sitecore/content/Applications/WebEdit",
-                "/sitecore/content/Applications/WebEdit/Custom Experience Buttons"
-            };
+            List<string> ignoredCoreRoutes = Settings.IgnoredRoutes.Core;
 
             return ignoredCoreRoutes;
         }
