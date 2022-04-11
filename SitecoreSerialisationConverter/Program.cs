@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Microsoft.Build.Evaluation;
+using System.Xml.Linq;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -13,20 +13,12 @@ using Sitecore.DevEx.Serialization;
 using Sitecore.DevEx.Serialization.Client;
 using Sitecore.DevEx.Serialization.Client.Configuration;
 using Sitecore.DevEx.Serialization.Client.Datasources.Filesystem.Configuration;
-using Sitecore.DevEx.Serialization.Client.Services;
 using Sitecore.DevEx.Serialization.Models;
 using Sitecore.DevEx.Serialization.Models.Roles;
 using SitecoreSerialisationConverter.Models;
 
 namespace SitecoreSerialisationConverter
 {
-    /// <summary>
-    /// 1. Install Sitecore Serialise into your environment - https://doc.sitecore.com/xp/en/developers/101/developer-tools/install-sitecore-command-line-interface.html
-    /// 2. Download and install CLI to Sitecore - https://dev.sitecore.net/Downloads/Sitecore_CLI.aspx
-    /// 3. Login to CLI - https://doc.sitecore.com/xp/en/developers/101/developer-tools/log-in-to-a-sitecore-instance-with-sitecore-command-line-interface.html
-    /// . Add new modules to config unless there is a wildcard match for anything.
-    /// ...TODO - finish instructions end to end in getting setup
-    /// </summary>
     class Program
     {
         public static Settings Settings;
@@ -59,12 +51,13 @@ namespace SitecoreSerialisationConverter
 
         private static void ConvertSerialisationFile(string projectPath, string savePath, bool useRelativeSavePath, string relativeSavePath)
         {
-            Project project = new Project(projectPath);
+            XDocument project = XDocument.Load(projectPath);
+            XNamespace msbuild = "http://schemas.microsoft.com/developer/msbuild/2003";
 
             if (project != null)
             {
-                var projectName = project.Properties.FirstOrDefault(x => x.Name == "MSBuildProjectName")?.UnevaluatedValue;
-                var database = project.Properties.FirstOrDefault(x => x.Name == "SitecoreDatabase")?.UnevaluatedValue;
+                string projectName = project.Descendants(msbuild + "RootNamespace").Select(x => x.Value).FirstOrDefault();
+                string database = project.Descendants(msbuild + "SitecoreDatabase").Select(x => x.Value).FirstOrDefault();
 
                 SerializationModuleConfiguration newConfigModule = new SerializationModuleConfiguration()
                 {
@@ -81,33 +74,31 @@ namespace SitecoreSerialisationConverter
                 var ignoreSyncChildren = false;
                 var ignoreDirectSyncChildren = false;
 
-                foreach (var item in project.Items)
+                foreach (var sitecoreItem in project.Descendants(msbuild + "SitecoreItem"))
                 {
-                    if (item.ItemType == "SitecoreItem")
-                    {
-                        var includePath = item.Xml.Include;
-                        var deploymentType = item.Xml.Metadata.FirstOrDefault(x => x.Name == "ItemDeployment")?.Value;
-                        var childSynchronisation = item.Xml.Metadata.FirstOrDefault(x => x.Name == "ChildItemSynchronization")?.Value;
+                    var includePath = sitecoreItem.Attribute("Include")?.Value;
+                    var deploymentType = sitecoreItem.Descendants(msbuild + "ItemDeployment").Select(x => x.Value).FirstOrDefault();
+                    var childSynchronisation = sitecoreItem.Descendants(msbuild + "ChildItemSynchronization").Select(x => x.Value).FirstOrDefault(); 
 
-                        RenderItem(database, newConfigModule, ref ignoreSyncChildren, ref ignoreDirectSyncChildren, includePath, deploymentType, childSynchronisation);
-                    }
-                    else if (item.ItemType == "SitecoreRole")
-                    {
-                        var includePathSplit = item.Xml.Include?.Split('\\');
+                    RenderItem(database, newConfigModule, ref ignoreSyncChildren, ref ignoreDirectSyncChildren, includePath, deploymentType, childSynchronisation);
+                }
 
-                        if (includePathSplit?.Length == 3)
+                foreach (var sitecoreRole in project.Descendants(msbuild + "SitecoreRole"))
+                {
+                    var includePathSplit = sitecoreRole.Attribute("Include")?.Value?.Split('\\');
+
+                    if (includePathSplit?.Length == 3)
+                    {
+                        var domain = includePathSplit[1];
+                        var roleName = includePathSplit[2];
+
+                        if (!string.IsNullOrEmpty(domain) && !string.IsNullOrEmpty(roleName))
                         {
-                            var domain = includePathSplit[1];
-                            var roleName = includePathSplit[2];
-
-                            if (!string.IsNullOrEmpty(domain) && !string.IsNullOrEmpty(roleName))
+                            roles.Add(new RolePredicateItem()
                             {
-                                roles.Add(new RolePredicateItem()
-                                {
-                                    Domain = domain,
-                                    Pattern = roleName.Replace(".role", string.Empty)
-                                });
-                            }
+                                Domain = domain,
+                                Pattern = roleName.Replace(".role", string.Empty)
+                            });
                         }
                     }
                 }
@@ -124,7 +115,7 @@ namespace SitecoreSerialisationConverter
 
                 if (useRelativeSavePath)
                 {
-                    savePath = Path.GetFullPath(Path.Combine(project.DirectoryPath, @relativeSavePath));
+                    savePath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(projectPath), @relativeSavePath));
                 }
 
                 WriteNewConfig(savePath, newConfigModule);
@@ -148,7 +139,7 @@ namespace SitecoreSerialisationConverter
                     }
                     else
                     {
-                        Console.WriteLine("Master ignored path: " + path);
+                        //Console.WriteLine("Master ignored path: " + path);
                     }
                 }
                 else if (database == "core")
@@ -163,7 +154,7 @@ namespace SitecoreSerialisationConverter
                     }
                     else
                     {
-                        Console.WriteLine("Core ignored path: " + path);
+                        //Console.WriteLine("Core ignored path: " + path);
                     }
                 }
             }
@@ -225,6 +216,8 @@ namespace SitecoreSerialisationConverter
                     JsonSerializer.Create(_serializerSettings).Serialize(textWriter, moduleConfiguration);
                 }
             }
+
+            Console.WriteLine(path);
         }
 
         private static List<string> GetIgnoredMasterRoutes()
@@ -250,7 +243,7 @@ namespace SitecoreSerialisationConverter
                 new FilesystemTreeSpecRuleConverter(),
                 new StringEnumConverter(new CamelCaseNamingStrategy())
             },
-            Formatting = Formatting.Indented,
+            Formatting = Newtonsoft.Json.Formatting.Indented,
             ContractResolver = new CamelCasePropertyNamesContractResolver(),
             //if we do want to leave out the defaults.
             //DefaultValueHandling = DefaultValueHandling.Ignore,
@@ -300,7 +293,7 @@ namespace SitecoreSerialisationConverter
         {
             if (!string.IsNullOrEmpty(currentPath))
             {
-                return $"/{currentPath.Replace(@"\", @"/").Replace(".yml", string.Empty)}";
+                return $"/{currentPath.Replace(@"\", @"/").Replace(".item", string.Empty).Replace(".yml", string.Empty)}";
             }
 
             return currentPath;
