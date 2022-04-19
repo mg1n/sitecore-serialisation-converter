@@ -108,17 +108,15 @@ namespace SitecoreSerialisationConverter
                     newConfigModule.Roles = roles;
                 }
 
-                if (!newConfigModule.Items.Includes.Any())
+                if (newConfigModule.Items.Includes.Any() || newConfigModule.Roles.Any())
                 {
-                    return;
-                }
+                    if (useRelativeSavePath)
+                    {
+                        savePath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(projectPath), @relativeSavePath));
+                    }
 
-                if (useRelativeSavePath)
-                {
-                    savePath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(projectPath), @relativeSavePath));
+                    WriteNewConfig(savePath, newConfigModule);
                 }
-
-                WriteNewConfig(savePath, newConfigModule);
             }
         }
 
@@ -135,11 +133,6 @@ namespace SitecoreSerialisationConverter
                     if (!matchedMasterPaths.Any())
                     {
                         AddItem(database, newConfigModule, includePath, deploymentType, childSynchronisation);
-
-                    }
-                    else
-                    {
-                        //Console.WriteLine("Master ignored path: " + path);
                     }
                 }
                 else if (database == "core")
@@ -149,12 +142,6 @@ namespace SitecoreSerialisationConverter
                     if (!matchedCorePaths.Any())
                     {
                         AddItem(database, newConfigModule, includePath, deploymentType, childSynchronisation);
-
-
-                    }
-                    else
-                    {
-                        //Console.WriteLine("Core ignored path: " + path);
                     }
                 }
             }
@@ -202,7 +189,6 @@ namespace SitecoreSerialisationConverter
 
 
             //set defaults
-
             newConfigModule.Items.Includes.Add(newSpec);
         }
 
