@@ -22,6 +22,7 @@ namespace SitecoreSerialisationConverter
     class Program
     {
         public static Settings Settings;
+        public static List<AliasItem> AliasList;
 
         static void Main(string[] args)
         {
@@ -56,6 +57,7 @@ namespace SitecoreSerialisationConverter
 
             if (project != null)
             {
+                AliasList = new List<AliasItem>();
                 string projectName = project.Descendants(msbuild + "RootNamespace").Select(x => x.Value).FirstOrDefault();
                 string database = project.Descendants(msbuild + "SitecoreDatabase").Select(x => x.Value).FirstOrDefault();
 
@@ -78,7 +80,19 @@ namespace SitecoreSerialisationConverter
                 {
                     var includePath = sitecoreItem.Attribute("Include")?.Value;
                     var deploymentType = sitecoreItem.Descendants(msbuild + "ItemDeployment").Select(x => x.Value).FirstOrDefault();
-                    var childSynchronisation = sitecoreItem.Descendants(msbuild + "ChildItemSynchronization").Select(x => x.Value).FirstOrDefault(); 
+                    var childSynchronisation = sitecoreItem.Descendants(msbuild + "ChildItemSynchronization").Select(x => x.Value).FirstOrDefault();
+                    var sitecoreName = sitecoreItem.Descendants(msbuild + "SitecoreName").Select(x => x.Value).FirstOrDefault();
+
+                    if (!string.IsNullOrEmpty(sitecoreName))
+                    {
+                        AliasItem aliasItem = new AliasItem()
+                        {
+                            AliasName = Path.GetFileNameWithoutExtension(includePath),
+                            SitecoreName = sitecoreName
+                        };
+
+                        AliasList.Add(aliasItem);
+                    }
 
                     RenderItem(database, newConfigModule, ref ignoreSyncChildren, ref ignoreDirectSyncChildren, includePath, deploymentType, childSynchronisation);
                 }
@@ -173,6 +187,8 @@ namespace SitecoreSerialisationConverter
 
         private static void AddItem(string database, SerializationModuleConfiguration newConfigModule, string includePath, string deploymentType, string childSynchronisation)
         {
+            includePath = RemovePathAlias(includePath);
+
             FilesystemTreeSpec newSpec = new FilesystemTreeSpec()
             {
                 Name = GetSafeName(includePath),
@@ -187,9 +203,24 @@ namespace SitecoreSerialisationConverter
                 newSpec.Database = database;
             }
 
-
             //set defaults
             newConfigModule.Items.Includes.Add(newSpec);
+        }
+
+        private static string RemovePathAlias(string includePath)
+        {
+            if (AliasList.Count > 0)
+            {
+                foreach (var item in AliasList)
+                {
+                    if (includePath.Contains($@"\{item.AliasName}\") || includePath.Contains($@"\{item.AliasName}."))
+                    {
+                        includePath = includePath.Replace($@"\{item.AliasName}\", $@"\{item.SitecoreName}\").Replace($@"\{item.AliasName}.", $@"\{item.SitecoreName}.");
+                    }
+                }
+            }
+
+            return includePath;
         }
 
         private static void WriteNewConfig(string savePath, SerializationModuleConfiguration moduleConfiguration)
@@ -219,6 +250,8 @@ namespace SitecoreSerialisationConverter
 
             return ignoredCoreRoutes;
         }
+
+
 
         private static readonly JsonSerializerSettings _serializerSettings = new JsonSerializerSettings
         {
