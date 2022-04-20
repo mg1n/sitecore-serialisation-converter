@@ -15,6 +15,7 @@ using Sitecore.DevEx.Serialization.Client.Configuration;
 using Sitecore.DevEx.Serialization.Client.Datasources.Filesystem.Configuration;
 using Sitecore.DevEx.Serialization.Models;
 using Sitecore.DevEx.Serialization.Models.Roles;
+using SitecoreSerialisationConverter.Commands;
 using SitecoreSerialisationConverter.Models;
 
 namespace SitecoreSerialisationConverter
@@ -138,11 +139,11 @@ namespace SitecoreSerialisationConverter
         {
             if (childSynchronisation == "NoChildSynchronization")
             {
-                var path = GetSafePath(includePath);
+                var path = SafePath.Get(includePath);
 
                 if (database == "master")
                 {
-                    var matchedMasterPaths = GetIgnoredMasterRoutes().Where(x => Regex.IsMatch(x, path, RegexOptions.IgnoreCase));
+                    var matchedMasterPaths = GetIgnoredRoutes.Master(Settings).Where(x => Regex.IsMatch(x, path, RegexOptions.IgnoreCase));
 
                     if (!matchedMasterPaths.Any())
                     {
@@ -151,7 +152,7 @@ namespace SitecoreSerialisationConverter
                 }
                 else if (database == "core")
                 {
-                    var matchedCorePaths = GetIgnoredCoreRoutes().Where(x => Regex.IsMatch(x, path, RegexOptions.IgnoreCase));
+                    var matchedCorePaths = GetIgnoredRoutes.Core(Settings).Where(x => Regex.IsMatch(x, path, RegexOptions.IgnoreCase));
 
                     if (!matchedCorePaths.Any())
                     {
@@ -187,14 +188,14 @@ namespace SitecoreSerialisationConverter
 
         private static void AddItem(string database, SerializationModuleConfiguration newConfigModule, string includePath, string deploymentType, string childSynchronisation)
         {
-            includePath = RemovePathAlias(includePath);
+            includePath = PathAlias.Remove(includePath, AliasList);
 
             FilesystemTreeSpec newSpec = new FilesystemTreeSpec()
             {
-                Name = GetSafeName(includePath),
-                Path = ItemPath.FromPathString(GetSafePath(includePath)),
-                AllowedPushOperations = GetPushOperation(deploymentType),
-                Scope = GetProjectedScope(childSynchronisation)
+                Name = SafeName.Get(includePath),
+                Path = ItemPath.FromPathString(SafePath.Get(includePath)),
+                AllowedPushOperations = PushOperation.Get(deploymentType),
+                Scope = ProjectedScope.Get(childSynchronisation)
             };
             
             //if it's not default then set it.
@@ -205,22 +206,6 @@ namespace SitecoreSerialisationConverter
 
             //set defaults
             newConfigModule.Items.Includes.Add(newSpec);
-        }
-
-        private static string RemovePathAlias(string includePath)
-        {
-            if (AliasList.Count > 0)
-            {
-                foreach (var item in AliasList)
-                {
-                    if (includePath.Contains($@"\{item.AliasName}\") || includePath.Contains($@"\{item.AliasName}."))
-                    {
-                        includePath = includePath.Replace($@"\{item.AliasName}\", $@"\{item.SitecoreName}\").Replace($@"\{item.AliasName}.", $@"\{item.SitecoreName}.");
-                    }
-                }
-            }
-
-            return includePath;
         }
 
         private static void WriteNewConfig(string savePath, SerializationModuleConfiguration moduleConfiguration)
@@ -236,22 +221,6 @@ namespace SitecoreSerialisationConverter
 
             Console.WriteLine(path);
         }
-
-        private static List<string> GetIgnoredMasterRoutes()
-        {
-            List<string> ignoredMasterRoutes = Settings.IgnoredRoutes.Master;
-
-            return ignoredMasterRoutes;
-        }
-
-        private static List<string> GetIgnoredCoreRoutes()
-        {
-            List<string> ignoredCoreRoutes = Settings.IgnoredRoutes.Core;
-
-            return ignoredCoreRoutes;
-        }
-
-
 
         private static readonly JsonSerializerSettings _serializerSettings = new JsonSerializerSettings
         {
@@ -269,64 +238,6 @@ namespace SitecoreSerialisationConverter
             NullValueHandling = NullValueHandling.Ignore,
             MissingMemberHandling = MissingMemberHandling.Ignore
         };
-
-        private static TreeScope GetProjectedScope(string childSyncSetting)
-        {
-            if (!string.IsNullOrEmpty(childSyncSetting))
-            {
-                switch (childSyncSetting)
-                {
-                    case "NoChildSynchronization":
-                        return TreeScope.SingleItem;
-                    case "KeepAllChildrenSynchronized":
-                        return TreeScope.ItemAndDescendants;
-                    case "KeepDirectDescendantsSynchronized":
-                        return TreeScope.ItemAndChildren;
-                    default:
-                        return TreeScope.SingleItem;
-                }
-            }
-
-            return TreeScope.SingleItem;
-        }
-
-        private static AllowedPushOperations GetPushOperation(string deploymentType)
-        {
-            if (!string.IsNullOrEmpty(deploymentType))
-            {
-                switch (deploymentType)
-                {
-                    case "AlwaysUpdate":
-                        return AllowedPushOperations.CreateUpdateAndDelete;
-                    case "DeployOnce":
-                        return AllowedPushOperations.CreateOnly;
-                    default:
-                        return AllowedPushOperations.CreateOnly;
-                }
-            }
-
-            return AllowedPushOperations.CreateAndUpdate;
-        }
-
-        private static string GetSafePath(string currentPath)
-        {
-            if (!string.IsNullOrEmpty(currentPath))
-            {
-                return $"/{currentPath.Replace(@"\", @"/").Replace(".item", string.Empty).Replace(".yml", string.Empty)}";
-            }
-
-            return currentPath;
-        }
-
-        private static string GetSafeName(string proposedName)
-        {
-            if (!string.IsNullOrEmpty(proposedName))
-            {
-                return proposedName.Replace(@"\", "-").Replace(@" ", "-").Replace(".item", string.Empty).Replace(".yml", string.Empty);
-            }
-
-            return proposedName;
-        }
     }
 
     public class DummyLoggerFactory : ILoggerFactory
