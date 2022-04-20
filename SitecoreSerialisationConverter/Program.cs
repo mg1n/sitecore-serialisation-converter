@@ -187,7 +187,11 @@ namespace SitecoreSerialisationConverter
 
         private static void AddItem(string database, SerializationModuleConfiguration newConfigModule, string includePath, string deploymentType, string childSynchronisation)
         {
-            includePath = RemovePathAlias(includePath);
+            bool hasAlias = false;
+
+            Tuple<string, bool> pathAlias = RemovePathAlias(includePath, hasAlias);
+            includePath = pathAlias.Item1;
+            hasAlias = pathAlias.Item2;  
 
             FilesystemTreeSpec newSpec = new FilesystemTreeSpec()
             {
@@ -197,6 +201,17 @@ namespace SitecoreSerialisationConverter
                 Scope = GetProjectedScope(childSynchronisation)
             };
 
+            if (hasAlias)
+            {
+                FilesystemTreeSpecRule newRule = new FilesystemTreeSpecRule()
+                {
+                    Path = ItemPath.FromPathString(GetSafePath(includePath)),
+                    Alias = AliasList.Select(x => x.AliasName).LastOrDefault()
+                };
+
+                newSpec.Rules.Add(newRule);
+            }
+            
             //if it's not default then set it.
             if (database != "master")
             {
@@ -207,7 +222,7 @@ namespace SitecoreSerialisationConverter
             newConfigModule.Items.Includes.Add(newSpec);
         }
 
-        private static string RemovePathAlias(string includePath)
+        private static Tuple<string, bool> RemovePathAlias(string includePath, bool hasAlias)
         {
             if (AliasList.Count > 0)
             {
@@ -216,11 +231,13 @@ namespace SitecoreSerialisationConverter
                     if (includePath.Contains($@"\{item.AliasName}\") || includePath.Contains($@"\{item.AliasName}."))
                     {
                         includePath = includePath.Replace($@"\{item.AliasName}\", $@"\{item.SitecoreName}\").Replace($@"\{item.AliasName}.", $@"\{item.SitecoreName}.");
+
+                        hasAlias = true;    
                     }
                 }
             }
 
-            return includePath;
+            return Tuple.Create(includePath, hasAlias);
         }
 
         private static void WriteNewConfig(string savePath, SerializationModuleConfiguration moduleConfiguration)
@@ -322,7 +339,7 @@ namespace SitecoreSerialisationConverter
         {
             if (!string.IsNullOrEmpty(proposedName))
             {
-                return proposedName.Replace(@"\", "-").Replace(".item", string.Empty).Replace(".yml", string.Empty);
+                return proposedName.Replace(@"\", "-").Replace(@" ", "-").Replace(".item", string.Empty).Replace(".yml", string.Empty);
             }
 
             return proposedName;
