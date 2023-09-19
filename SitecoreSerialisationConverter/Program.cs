@@ -240,51 +240,6 @@ namespace SitecoreSerialisationConverter
         };
     }
 
-    public class DummyLoggerFactory : ILoggerFactory
-    {
-        public void Dispose()
-        {
-            //throw new NotImplementedException();
-        }
-
-        public ILogger CreateLogger(string categoryName)
-        {
-            //throw new NotImplementedException();
-            return new DummyLogger();
-        }
-
-        public void AddProvider(ILoggerProvider provider)
-        {
-            //throw new NotImplementedException();
-        }
-    }
-
-    public class DummyLogger : ILogger, IDisposable
-    {
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-        {
-            //throw new NotImplementedException();
-
-        }
-
-        public bool IsEnabled(LogLevel logLevel)
-        {
-            return false;
-            //throw new NotImplementedException();
-        }
-
-        public IDisposable BeginScope<TState>(TState state)
-        {
-            //throw new NotImplementedException();
-            return this;
-        }
-
-        public void Dispose()
-        {
-            //throw new NotImplementedException();
-        }
-    }
-
     public class FilesystemTreeSpecRuleConverter : JsonConverter<TreeSpecRule>
     {
         public override bool CanWrite => false;
