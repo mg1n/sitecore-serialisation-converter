@@ -14,5 +14,8 @@ namespace SitecoreSerialisationConverter.Models
         public bool UseRelativeSavePath { get; set; }
         public string RelativeSavePath { get; set; }
         public IgnoredRoutes IgnoredRoutes { get; set; } = null!;
+        public bool StripTDSFromName { get; set; }
+        public string ProjectNameToMatch { get; set; }
+        public bool SkipCreateIfExists { get; set; }
     }
 }
