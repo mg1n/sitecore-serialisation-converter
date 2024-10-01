@@ -1,9 +1,8 @@
 # Sitecore TDS to SCS serialisation converter
-
 This tool can be used to help customers transition from TDS projects to SCS modules.
  
 After the tool is run in the solution web root, all scproj files should be turned into equivalent SCS modules.
-Then after running ‘sitecore ser pull’ the relevant items are synchronised from the Sitecore database to disk, after which the TDS projects and associated item files can be deleted.
+Then after running `sitecore ser pull` the relevant items are synchronised from the Sitecore database to disk, after which the TDS projects and associated item files can be deleted.
  
 Supported features:
 * Support for Core/Master databases.
@@ -32,3 +31,8 @@ Configuration will be required to point Sitecore CLI Serialization to the locati
 * If not using a relative path or when testing file output the modules setting in sitecore.json will need to be updated to the location of module.json files for example `SerializationTest/*.module.json`.
 * For Helix setup the modules setting within the sitecore.json file should be set as `src/*/*/*.module.json` for example.
 
+
+## Visual Studio build setup
+* Ensure that the Sitecore NuGet package source is added in Visual Studio settings: `NuGet Package Manager` --> `Package Sources` --> https://sitecore.myget.org/F/sc-packages/api/v3/index.json
+* Restore NuGet Packages
+* Build solution
