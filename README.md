@@ -21,8 +21,8 @@ Supported features:
 Update the following settings within the appSettings.json file:
 * ProjectDescription: Enter your project description.
 * SolutionFolder: Enter the path to your solution folder (for example `C:/Projects/helix-basic-tds/src/`).
-* SavePath: If relative save path is not used this is the loaction where module.json files will be exported (`C:/Temp/ConvertedSerialisationFiles`). This is useful to test file output in a single location.
-* UseRelativeSavePath: Default is set to `false`. Change to true to output files to relative locations with the solution. This assumes convenstions have been followed for TDS folder setup.
+* SavePath: If relative save path is not used this is the location where module.json files will be exported (`C:/Temp/ConvertedSerialisationFiles`). This is useful to test file output in a single location.
+* UseRelativeSavePath: Default is set to `false`. Change to true to output files to relative locations with the solution. This assumes conventions have been followed for TDS folder setup.
 * RelativeSavePath: Used if relative save path is true the default value is `../../`. This will output module.json files to modules root directories.
 * Ignore paths: Ignore paths exist for both master and core databases. These are important to specify for no child syncronisation single item type deployment items as TDS includes standard Sitecore paths by default on KeepAllChildrenSynchronized and KeepDirectDescendantsSynchronized items.
 
